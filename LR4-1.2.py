@@ -1,10 +1,9 @@
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import csv
 import time
 
-# Настройки
-base_url = "https://worldathletics.org/records/toplists"
 years = range(2001, 2025)
 genders = ['men', 'women']
 events = {
@@ -14,15 +13,16 @@ events = {
     '400m': '400-metres'
 }
 
+options = Options()
+options.add_argument("--headless")
+driver = webdriver.Chrome(options=options)
+
 def parse_top1_result(url):
     try:
-        r = requests.get(url)
-        if r.status_code != 200:
-            print(f"Ошибка загрузки: {url}")
-            return None
-        soup = BeautifulSoup(r.text, 'html.parser')
+        driver.get(url)
+        time.sleep(3)
 
-        # На сайте таблица результатов может иметь класс 'records-table' или похожий
+        soup = BeautifulSoup(driver.page_source, "html.parser")
         table = soup.find('table')
         if not table:
             print(f"Таблица не найдена на {url}")
@@ -34,8 +34,6 @@ def parse_top1_result(url):
             return None
 
         cells = first_row.find_all('td')
-        # Проверим количество ячеек, на сайте  обычно:
-        # 0 - место, 1 - спортсмен, 2 - страна, 3 - результат, 4 - дата
         athlete = cells[1].text.strip()
         country = cells[2].text.strip()
         time_result = cells[3].text.strip()
@@ -46,28 +44,27 @@ def parse_top1_result(url):
         print(f"Ошибка парсинга {url}: {e}")
         return None
 
-def main_scraping_part():
+def main():
     results = []
     for gender in genders:
-        for event_key, event_url_part in events.items():
+        for event_key, event_slug in events.items():
             for year in years:
-                # Формируем URL (пример):
-                # https://worldathletics.org/records/toplists/sprint/outdoor/100-metres/men/year=2024
-                url = f"https://worldathletics.org/records/toplists/sprint/outdoor/{event_url_part}/{gender}/year={year}"
+                url = f"https://worldathletics.org/records/toplists/sprints/{event_slug}/outdoor/{gender}/senior/{year}"
                 print(f"Обрабатываю: {url}")
                 data = parse_top1_result(url)
                 if data:
                     athlete, country, time_result, competition_date = data
                     results.append([year, gender, event_key, athlete, country, time_result, competition_date])
-                time.sleep(0.5)  # не нагружаем сервер
+                time.sleep(1)
 
-    # Сохраняем в CSV
-    with open("top_results.csv", "w", newline='', encoding='utf-8') as f:
+    driver.quit()
+
+    with open("top_results.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(['Year', 'Gender', 'Event', 'Athlete', 'Country', 'Time', 'Date'])
+        writer.writerow(["Year", "Gender", "Event", "Athlete", "Country", "Time", "Date"])
         writer.writerows(results)
 
-    print("Данные сохранены в top_results.csv")
+    print("Готово! Данные сохранены в top_results.csv")
 
 if __name__ == "__main__":
-    main_scraping_part()
+    main()
